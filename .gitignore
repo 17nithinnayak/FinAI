@@ -1,0 +1,18 @@
+Python virtual environment
+venv/
+/venv/
+
+Python cache files
+pycache/
+*.pyc
+*.pyo
+*.pyd
+.env
+
+User-specific data - DO NOT COMMIT SENSITIVE DATA
+user_profile.json
+
+IDE and OS files
+.vscode/
+.idea/
+.DS_Store

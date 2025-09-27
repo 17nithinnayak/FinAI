@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binary Brains - Investment Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .pulsing { animation: pulse 1.s infinite; }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-2xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text">
+                Binary Brains
+            </h1>
+            <p class="text-gray-400 mt-2">Your AI Investment Friend</p>
+        </header>
+
+        <div class="mb-6 text-center">
+            <p class="text-lg mb-2">Select Language</p>
+            <div class="inline-flex rounded-md shadow-sm bg-gray-800" role="group">
+                <button id="lang-en" type="button" class="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-gray-700 rounded-l-lg hover:bg-purple-700">English</button>
+                <button id="lang-kn" type="button" class="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 border-t border-b border-gray-700 hover:bg-gray-700 hover:text-white">ಕನ್ನಡ</button>
+            </div>
+        </div>
+
+        <main class="bg-gray-800 p-6 rounded-2xl shadow-lg flex flex-col">
+            <h2 class="text-2xl font-semibold mb-4 text-center">Investment Agent</h2>
+             <div class="flex-grow flex flex-col space-y-4">
+                <textarea id="invest-input" class="w-full p-3 bg-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500" rows="4" placeholder="Ask for investment advice... e.g., 'What should I do with my savings?'"></textarea>
+                <div class="flex items-center space-x-4">
+                    <button id="invest-mic-btn" class="p-3 bg-red-600 rounded-full hover:bg-red-700 transition-transform transform hover:scale-110"><i class="fas fa-microphone text-white text-xl"></i></button>
+                    <button id="invest-send-btn" class="flex-grow py-3 px-6 bg-purple-600 rounded-lg text-lg font-semibold hover:bg-purple-700 transition-transform transform hover:scale-105">Get Advice</button>
+                </div>
+                <div id="invest-response-area" class="flex-grow bg-gray-900 p-4 rounded-lg min-h-[200px] overflow-y-auto"><p class="text-gray-500">Investment suggestions will appear here...</p></div>
+                <button id="invest-speak-btn" class="w-full py-3 px-6 bg-blue-600 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-600 flex items-center justify-center space-x-2" disabled><i class="fas fa-volume-up"></i><span>Speak Response</span></button>
+            </div>
+        </main>
+        <!-- Audio player element, hidden from view, to play our backend-generated audio -->
+        <audio id="audio-player" style="display: none;"></audio>
+    </div>
+
+<script>
+    const API_BASE_URL = "http://127.0.0.1:8000";
+
+    // --- DOM Elements & State ---
+    const langEnBtn = document.getElementById('lang-en');
+    const langKnBtn = document.getElementById('lang-kn');
+    const investInput = document.getElementById('invest-input');
+    const investMicBtn = document.getElementById('invest-mic-btn');
+    const investSendBtn = document.getElementById('invest-send-btn');
+    const investResponseArea = document.getElementById('invest-response-area');
+    const investSpeakBtn = document.getElementById('invest-speak-btn');
+    const audioPlayer = document.getElementById('audio-player');
+    
+    let currentLang = 'en-US';
+    let recognition;
+    let isListening = false;
+    let rawTextForTTS = '';
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    // --- Core Functions ---
+    function setupSpeechRecognition() {
+        if (!SpeechRecognition) return alert("Browser doesn't support Speech Recognition.");
+        recognition = new SpeechRecognition();
+        recognition.lang = currentLang;
+        recognition.onstart = () => { isListening = true; investMicBtn.classList.add('pulsing'); };
+        recognition.onend = () => { isListening = false; investMicBtn.classList.remove('pulsing'); };
+        recognition.onerror = (e) => console.error("Speech recognition error:", e.error);
+        recognition.onresult = (e) => {
+            investInput.value = e.results[0][0].transcript;
+        };
+    }
+    
+    async function callAgent() {
+        const query = investInput.value;
+        if (!query.trim()) return;
+        
+        investSpeakBtn.disabled = true;
+        investResponseArea.innerHTML = `<p class="text-blue-400 animate-pulse">Aarthik Mitra is thinking...</p>`;
+        rawTextForTTS = '';
+
+        try {
+            const body = { user_query: query, language: currentLang };
+            const response = await fetch(`${API_BASE_URL}/ask/investment`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!response.ok) throw new Error(`API Error (${response.status})`);
+            
+            const data = await response.json();
+            const responseText = data.agent_response;
+            rawTextForTTS = responseText;
+            
+            const formattedText = responseText
+                .replace(/#\s(.*?)\n/g, '<h3>$1</h3>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+
+            investResponseArea.innerHTML = `<p>${formattedText}</p>`;
+            investSpeakBtn.disabled = false;
+        } catch (error) {
+            investResponseArea.innerHTML = `<p class="text-red-400"><strong>Error:</strong> ${error.message}. Is the backend running?</p>`;
+        }
+    }
+
+    async function speakText() {
+        if (!rawTextForTTS) return;
+        try {
+            investSpeakBtn.disabled = true;
+            investSpeakBtn.querySelector('span').textContent = 'Generating Speech...';
+            
+            // THE FIX: Clean the markdown from the text before sending it for speech synthesis.
+            const cleanTextForSpeech = rawTextForTTS
+                .replace(/#\s/g, '') // Remove heading hashes
+                .replace(/\*/g, '')  // Remove asterisks for bold/italics
+                .replace(/\[(.*?)\]\(.*?\)/g, '$1'); // Keep link text, remove URL markdown
+
+            const response = await fetch(`${API_BASE_URL}/text-to-speech`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: cleanTextForSpeech, language: currentLang })
+            });
+            if (!response.ok) throw new Error('Failed to generate speech from backend.');
+            
+            const audioBlob = await response.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            audioPlayer.src = audioUrl;
+            audioPlayer.play();
+
+            audioPlayer.onended = () => {
+                investSpeakBtn.disabled = false;
+                investSpeakBtn.querySelector('span').textContent = 'Speak Response';
+            };
+
+        } catch (error) {
+            console.error("TTS Error:", error);
+            alert("Sorry, I couldn't generate the speech for that text.");
+            investSpeakBtn.disabled = false;
+            investSpeakBtn.querySelector('span').textContent = 'Speak Response';
+        }
+    }
+
+    function startListening() {
+        if (isListening) return recognition.stop();
+        try {
+             recognition.start();
+        } catch(e) {
+            console.error("Could not start recognition:", e);
+            alert("Speech recognition could not be started. Please check browser permissions.");
+        }
+    }
+
+    // --- Event Listeners ---
+    langEnBtn.addEventListener('click', () => {
+        currentLang = 'en-US';
+        langEnBtn.classList.add('bg-purple-600', 'text-white');
+        langKnBtn.classList.remove('bg-purple-600', 'text-white');
+        setupSpeechRecognition();
+    });
+
+    langKnBtn.addEventListener('click', () => {
+        currentLang = 'kn-IN';
+        langKnBtn.classList.add('bg-purple-600', 'text-white');
+        langEnBtn.classList.remove('bg-purple-600', 'text-white');
+        setupSpeechRecognition();
+    });
+    
+    investMicBtn.addEventListener('click', startListening);
+    investSendBtn.addEventListener('click', callAgent);
+    investSpeakBtn.addEventListener('click', speakText);
+
+    window.addEventListener('load', () => {
+        setupSpeechRecognition();
+    });
+</script>
+</body>
+</html>
+
